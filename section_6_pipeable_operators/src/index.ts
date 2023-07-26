@@ -122,6 +122,7 @@ source$
 // 2
 
 // concatMap(): Dynamic HTTP Request example
+//Error handling first solution - gracefull complete with EMPTY
 const endpointInput: HTMLInputElement =
   document.querySelector("input#endpoint");
 const fetchButton = document.querySelector("button#fetch");
@@ -131,6 +132,41 @@ fromEvent(fetchButton, "click")
     map(() => endpointInput.value),
     concatMap((value) =>
       ajax(`https://random-data-api.com/api/${value}/random_${value}`)
+    ),
+    catchError(() => EMPTY) // catch any errors and return EMPTY instead, because errors will kill the Observable. But it will still 'complete' and close it.
+  )
+  .subscribe({
+    next: (value) => console.log(value),
+    error: (err) => console.log("Error:", err),
+    complete: () => console.log("Completed"),
+  });
+
+//Error handling second solution - this will keep the stream alive
+fromEvent(fetchButton, "click")
+  .pipe(
+    map(() => endpointInput.value),
+    concatMap((value) =>
+      ajax(`https://random-data-api.com/api/${value}/random_${value}`).pipe(
+        catchError((error) => of(`Could not fetch data: ${error}`))
+      )
     )
   )
-  .subscribe((value) => console.log(value));
+  .subscribe({
+    next: (value) => console.log(value),
+    error: (err) => console.log("Error:", err),
+    complete: () => console.log("Completed"),
+  });
+
+// concatMap() concurrency:
+// the operator will wait until the nested observable completes, which can be never - this makes it easy to notice memmory leaks.
+// Actions are executed consecutevely, one by one.
+// Execution is blocking. Usefull when all emmitted values matter and their order also matters.
+
+// switchMap():
+// same execution as concatMap(), but it doesn't wait for the previous execution to complete.
+// It will get interrupted and the second one in line will be executed immediately by interrupting the previous one.
+// The cancelling/unsubscribing of the previous one, makes memmory leaks not that dangerous.
+// Execution is being cut off. Usefull when we want the latest value fast.
+
+// mergeMap()
+// Execution is done in parallel. Usefull when order doesn't matter, but we want all values.
